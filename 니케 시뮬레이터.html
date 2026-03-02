@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>니케 전투 시뮬레이터 (3스킬 & 범용 중첩 시스템)</title>
+    <title>아스트라 전투 시뮬레이터</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* 기본 테마 설정 */
@@ -51,7 +51,7 @@
 </head>
 <body>
 
-    <h1>🔫 밸런스 검증 시뮬레이터: 3스킬 분리 & 범용 중첩 시스템</h1>
+    <h1>🔫 아스트라 전투 시뮬레이터</h1>
     
     <div class="app-container">
         <div class="config-panel">
@@ -79,7 +79,7 @@
                 </div>
                 
                 <div class="box" style="flex: 1; border-color: #f3c300;">
-                    <h3 style="color: #f3c300;">✨ [B안] 신규 캐릭터 투입 편성</h3>
+                    <h3 style="color: #f3c300;">✨ [B안] 아스트라 투입 편성</h3>
                     <div id="teamB_slots"></div>
                 </div>
             </div>
@@ -146,7 +146,7 @@
         function createNewCharSlot() {
             return `
                 <div class="slot-editor new-char-slot">
-                    <h4>✨ 기획안: 예열형 디버퍼 (Slot 1)</h4>
+                    <h4>✨ 아스트라 (Slot 1)</h4>
                     <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
                         <b style="color:#ddd;">버스트 정보</b>
                         <div>
@@ -274,7 +274,7 @@
             document.getElementById('resultSummary').innerHTML = `
                 전투 종료 시뮬레이션 결과<br><br>
                 <span style="color:#aaa;">[A안] 기존 조합: ${Math.floor(totalA).toLocaleString()}</span><br>
-                <span style="color:#f3c300;">[B안] 신규 투입: ${Math.floor(totalB).toLocaleString()}</span><br><br>
+                <span style="color:#f3c300;">[B안] 아스트라 투입: ${Math.floor(totalB).toLocaleString()}</span><br><br>
                 기존 파티 대비 총 딜량이<br>${diffSpan} 했습니다!
             `;
         }
@@ -454,7 +454,7 @@
                     labels: resA.labels,
                     datasets: [
                         { label: '[A안] 기존 조합 누적 딜량', data: resA.data, borderColor: '#777', borderWidth: 2, pointRadius: 0 },
-                        { label: '[B안] 신규 투입 누적 딜량', data: resB.data, borderColor: '#f3c300', backgroundColor: 'rgba(243, 195, 0, 0.15)', borderWidth: 3, pointRadius: 0, fill: true }
+                        { label: '[B안] 아스트라 투입 누적 딜량', data: resB.data, borderColor: '#f3c300', backgroundColor: 'rgba(243, 195, 0, 0.15)', borderWidth: 3, pointRadius: 0, fill: true }
                     ]
                 },
                 options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
@@ -464,4 +464,5 @@
         window.onload = () => { initUI(); runSimulation(); };
     </script>
 </body>
+
 </html>
