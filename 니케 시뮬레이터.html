@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>니케 전투 시뮬레이터 (3스킬 & 범용 중첩 시스템)</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 기본 테마 설정 */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121216; color: #e0e0e0; margin: 0; padding: 20px; }
+        h1, h2, h3, h4 { color: #f3c300; margin-top: 0; }
+        
+        /* 스플릿 레이아웃 */
+        .app-container { display: flex; gap: 30px; max-width: 1600px; margin: 0 auto; align-items: flex-start; }
+        .config-panel { flex: 1.3; display: flex; flex-direction: column; gap: 20px; }
+        .result-panel { flex: 1; position: sticky; top: 20px; background: #1e1e24; padding: 25px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); border: 1px solid #333; }
+
+        /* 공통 패널 스타일 */
+        .box { background: #1e1e24; padding: 20px; border-radius: 8px; border: 1px solid #333; }
+        
+        /* 입력 폼 스타일 */
+        .input-group { margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #bbb; border-bottom: 1px solid #2a2a35; padding-bottom: 8px; }
+        .input-group:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+        .input-group input, .input-group select { padding: 4px; background: #121216; color: #fff; border: 1px solid #444; border-radius: 4px; text-align: right; }
+        
+        /* 슬롯 에디터 & 새끼 슬롯(Sub-slot) 스타일 */
+        .slot-editor { background: #25252e; padding: 15px; margin-top: 15px; border-radius: 8px; border-left: 4px solid #555; }
+        .skill-box { background: #1a1a20; border: 1px solid #333; padding: 10px; margin-bottom: 8px; border-radius: 6px; }
+        .skill-box h5 { margin: 0 0 8px 0; color: #888; font-size: 13px; }
+        
+        /* 새끼 슬롯 디자인 */
+        .sub-slot { display: flex; justify-content: space-between; align-items: center; background: #121216; padding: 6px; margin-top: 4px; border-radius: 4px; font-size: 12px; border: 1px solid #2a2a35; }
+        .sub-slot select { width: 85px; font-size: 11px; padding: 3px; }
+        .sub-slot input { width: 45px; font-size: 12px; padding: 3px; }
+        .sub-slot span.badge { display: inline-block; background: #333; color: #aaa; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
+
+        /* 신규 캐릭터 전용 강조 스타일 */
+        .new-char-slot { border: 2px solid #ff5252; background: #2a1a1a; margin-bottom: 20px; }
+        .new-char-slot h4 { color: #ff5252; font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid #ff5252; padding-bottom: 5px; }
+        .new-char-slot .skill-box { border-color: #552222; background: #1f1212; }
+        .new-char-slot .skill-box h5 { color: #ff8888; }
+
+        /* 버튼 및 결과 영역 */
+        .btn-run { display: block; width: 100%; padding: 18px; background: #f3c300; color: #121216; border: none; font-size: 20px; font-weight: 900; cursor: pointer; border-radius: 8px; margin-bottom: 20px; transition: 0.2s; box-shadow: 0 4px 10px rgba(243, 195, 0, 0.3); }
+        .btn-run:hover { background: #ffdf33; transform: translateY(-2px); }
+        .chart-wrapper { height: 350px; width: 100%; background: #121216; padding: 15px; border-radius: 8px; box-sizing: border-box; }
+        #resultSummary { margin-top: 20px; padding: 20px; background: #121216; border-radius: 8px; font-size: 18px; text-align: center; line-height: 1.6; border: 1px solid #333; }
+        .highlight-red { color: #ff5252; font-weight: bold; font-size: 22px; }
+        .highlight-yellow { color: #f3c300; font-weight: bold; font-size: 22px; }
+    </style>
+</head>
+<body>
+
+    <h1>🔫 밸런스 검증 시뮬레이터: 3스킬 분리 & 범용 중첩 시스템</h1>
+    
+    <div class="app-container">
+        <div class="config-panel">
+            <div class="box">
+                <h3>⚙️ 기본 전투 파라미터</h3>
+                <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <div class="input-group"><label>파티 기본 DPS (초당)</label><input type="number" id="baseDps" value="10000" style="width:70px;"></div>
+                        <div class="input-group"><label>전투 시간 (초)</label><input type="number" id="battleTime" value="180" style="width:70px;"></div>
+                        <div class="input-group"><label style="color:#f3c300;">첫 버스트 진입 (초)</label><input type="number" id="firstBurstTime" value="5" style="width:70px;"></div>
+                        <div class="input-group"><label>이후 버스트 게이지 충전 (초)</label><input type="number" id="gaugeTime" value="5" style="width:70px;"></div>
+                    </div>
+                    <div style="flex: 1; min-width: 250px;">
+                        <div class="input-group"><label>기본 크리 확률 (%)</label><input type="number" id="baseCritRate" value="15" style="width:70px;"></div>
+                        <div class="input-group"><label>기본 크리 데미지 (%)</label><input type="number" id="baseCritDmg" value="50" style="width:70px;"></div>
+                        <div class="input-group"><label>풀버스트 유지시간 (초)</label><input type="number" value="10" disabled title="고정값" style="width:70px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 20px;">
+                <div class="box" style="flex: 1;">
+                    <h3 style="color: #aaa;">[A안] 기존 파티 편성</h3>
+                    <div id="teamA_slots"></div>
+                </div>
+                
+                <div class="box" style="flex: 1; border-color: #f3c300;">
+                    <h3 style="color: #f3c300;">✨ [B안] 신규 캐릭터 투입 편성</h3>
+                    <div id="teamB_slots"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="result-panel">
+            <button class="btn-run" onclick="runSimulation()">시뮬레이션 돌려보기 🚀</button>
+            
+            <h3>📈 누적 딜량 비교 그래프</h3>
+            <div class="chart-wrapper">
+                <canvas id="damageChart"></canvas>
+            </div>
+            
+            <div id="resultSummary">
+                좌측의 스킬 수치를 조정하고 시뮬레이션을 실행하여<br>신규 캐릭터의 딜 기여도를 확인하세요.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const targetOpts = `<option value="all">아군 전체</option><option value="self">자신</option><option value="single">아군 1기</option><option value="enemy">적 전체</option>`;
+        const typeOpts = `<option value="atk">공격력 증가(%)</option><option value="crit_rate">크리 확률(%)</option><option value="crit_dmg">크리 데미지(%)</option><option value="debuff">받뎀증(디버프)(%)</option>`;
+
+        // 일반 니케 슬롯 UI 생성 (스킬1, 스킬2, 버스트)
+        function createStandardSlot(teamId, slotIdx, defaultTier) {
+            return `
+                <div class="slot-editor">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                        <b style="color:#ddd;">Slot ${slotIdx+1}</b>
+                        <div>
+                            <select id="${teamId}_s${slotIdx}_bTier"><option value="1" ${defaultTier==1?'selected':''}>B I</option><option value="2" ${defaultTier==2?'selected':''}>B II</option><option value="3" ${defaultTier==3?'selected':''}>B III</option></select>
+                            <input type="number" id="${teamId}_s${slotIdx}_bCD" value="${defaultTier==3 ? 40 : 20}" style="width:40px;">초 쿨
+                        </div>
+                    </div>
+                    
+                    <div class="skill-box">
+                        <h5>[일반 스킬 1]</h5>
+                        <div class="input-group">주기 / 유지 / 중첩 <div><input type="number" id="${teamId}_s${slotIdx}_s1_int" value="0" style="width:30px">s / <input type="number" id="${teamId}_s${slotIdx}_s1_dur" value="0" style="width:30px">s / <input type="number" id="${teamId}_s${slotIdx}_s1_max" value="1" style="width:30px">스택</div></div>
+                        <div class="sub-slot"><span class="badge">효과1</span> <select id="${teamId}_s${slotIdx}_s1_e1_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_s1_e1_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_s1_e1_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과2</span> <select id="${teamId}_s${slotIdx}_s1_e2_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_s1_e2_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_s1_e2_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과3</span> <select id="${teamId}_s${slotIdx}_s1_e3_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_s1_e3_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_s1_e3_val" value="0">%</div>
+                    </div>
+
+                    <div class="skill-box">
+                        <h5>[일반 스킬 2]</h5>
+                        <div class="input-group">주기 / 유지 / 중첩 <div><input type="number" id="${teamId}_s${slotIdx}_s2_int" value="0" style="width:30px">s / <input type="number" id="${teamId}_s${slotIdx}_s2_dur" value="0" style="width:30px">s / <input type="number" id="${teamId}_s${slotIdx}_s2_max" value="1" style="width:30px">스택</div></div>
+                        <div class="sub-slot"><span class="badge">효과1</span> <select id="${teamId}_s${slotIdx}_s2_e1_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_s2_e1_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_s2_e1_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과2</span> <select id="${teamId}_s${slotIdx}_s2_e2_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_s2_e2_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_s2_e2_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과3</span> <select id="${teamId}_s${slotIdx}_s2_e3_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_s2_e3_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_s2_e3_val" value="0">%</div>
+                    </div>
+
+                    <div class="skill-box" style="border-color:#555;">
+                        <h5 style="color:#ddd;">[버스트 스킬]</h5>
+                        <div class="input-group">유지(초) / 중첩 <div><input type="number" id="${teamId}_s${slotIdx}_b_dur" value="10" style="width:35px">s / <input type="number" id="${teamId}_s${slotIdx}_b_max" value="1" style="width:35px">스택</div></div>
+                        <div class="sub-slot"><span class="badge">효과1</span> <select id="${teamId}_s${slotIdx}_b_e1_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_b_e1_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_b_e1_val" value="15">%</div>
+                        <div class="sub-slot"><span class="badge">효과2</span> <select id="${teamId}_s${slotIdx}_b_e2_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_b_e2_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_b_e2_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과3</span> <select id="${teamId}_s${slotIdx}_b_e3_tgt">${targetOpts}</select> <select id="${teamId}_s${slotIdx}_b_e3_typ">${typeOpts}</select> <input type="number" id="${teamId}_s${slotIdx}_b_e3_val" value="0">%</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // 신규 캐릭터 전용 슬롯 UI (특수 1스킬 + 범용 2스킬 + 특수 버스트) - 보조 슬롯 제거됨
+        function createNewCharSlot() {
+            return `
+                <div class="slot-editor new-char-slot">
+                    <h4>✨ 기획안: 예열형 디버퍼 (Slot 1)</h4>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
+                        <b style="color:#ddd;">버스트 정보</b>
+                        <div>
+                            <select id="nc_bTier"><option value="1">B I</option><option value="2">B II</option><option value="3" selected>B III</option></select>
+                            <input type="number" id="nc_bCD" value="40" style="width:40px;">초 쿨
+                        </div>
+                    </div>
+                    
+                    <div class="skill-box">
+                        <h5>[일반 스킬 1] 지속 누적 디버프 (고유 기믹)</h5>
+                        <div class="input-group">적용 주기 (초) <input type="number" id="nc_s1_int" value="1" style="width:40px;"></div>
+                        <div class="input-group">스택 유지 (초) <input type="number" id="nc_s1_dur" value="5" style="width:40px;"></div>
+                        <div class="input-group">스택당 받뎀증 (%) <input type="number" id="nc_s1_val" value="2" style="width:40px;"></div>
+                        <div class="input-group">최대 중첩 수 (스택) <input type="number" id="nc_s1_max" value="5" style="width:40px;"></div>
+                    </div>
+
+                    <div class="skill-box">
+                        <h5>[일반 스킬 2] 범용 버프/디버프 (선택)</h5>
+                        <div class="input-group">주기 / 유지 / 중첩 <div><input type="number" id="nc_s2_int" value="0" style="width:30px">s / <input type="number" id="nc_s2_dur" value="0" style="width:30px">s / <input type="number" id="nc_s2_max" value="1" style="width:30px">스택</div></div>
+                        <div class="sub-slot"><span class="badge">효과1</span> <select id="nc_s2_e1_tgt">${targetOpts}</select> <select id="nc_s2_e1_typ">${typeOpts}</select> <input type="number" id="nc_s2_e1_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과2</span> <select id="nc_s2_e2_tgt">${targetOpts}</select> <select id="nc_s2_e2_typ">${typeOpts}</select> <input type="number" id="nc_s2_e2_val" value="0">%</div>
+                        <div class="sub-slot"><span class="badge">효과3</span> <select id="nc_s2_e3_tgt">${targetOpts}</select> <select id="nc_s2_e3_typ">${typeOpts}</select> <input type="number" id="nc_s2_e3_val" value="0">%</div>
+                    </div>
+
+                    <div class="skill-box">
+                        <h5>[버스트] 스택 폭발 디버프</h5>
+                        <div class="input-group">유지 시간 (초) <input type="number" id="nc_b_dur" value="10" style="width:40px;"></div>
+                        <div class="input-group">기본 받뎀증 (%) <input type="number" id="nc_b_base" value="15" style="width:40px;"></div>
+                        <div class="input-group">1스택당 '추가' 받뎀증 (%) <input type="number" id="nc_b_bonus" value="3" style="width:40px;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function initUI() {
+            let teamA_html = '', teamB_html = '';
+            const tiersA = [1, 2, 3, 3, 1];
+            const tiersB = [3, 1, 2, 3, 1]; 
+            
+            for(let i=0; i<5; i++) {
+                teamA_html += createStandardSlot('A', i, tiersA[i]);
+                if (i === 0) teamB_html += createNewCharSlot();
+                else teamB_html += createStandardSlot('B', i, tiersB[i]);
+            }
+            document.getElementById('teamA_slots').innerHTML = teamA_html;
+            document.getElementById('teamB_slots').innerHTML = teamB_html;
+        }
+
+        function getTeamConfig(teamId) {
+            let team = [];
+            for(let i=0; i<5; i++) {
+                if (teamId === 'B' && i === 0) {
+                    team.push({
+                        isNewChar: true, burstTier: parseInt(document.getElementById('nc_bTier').value), burstCD: parseInt(document.getElementById('nc_bCD').value),
+                        s1: {
+                            interval: parseInt(document.getElementById('nc_s1_int').value), val: parseFloat(document.getElementById('nc_s1_val').value) / 100,
+                            maxStacks: parseInt(document.getElementById('nc_s1_max').value), duration: parseInt(document.getElementById('nc_s1_dur').value)
+                        },
+                        s2: {
+                            interval: parseInt(document.getElementById('nc_s2_int').value), duration: parseInt(document.getElementById('nc_s2_dur').value), maxStacks: parseInt(document.getElementById('nc_s2_max').value),
+                            effects: [
+                                { target: document.getElementById('nc_s2_e1_tgt').value, type: document.getElementById('nc_s2_e1_typ').value, value: parseFloat(document.getElementById('nc_s2_e1_val').value) / 100 },
+                                { target: document.getElementById('nc_s2_e2_tgt').value, type: document.getElementById('nc_s2_e2_typ').value, value: parseFloat(document.getElementById('nc_s2_e2_val').value) / 100 },
+                                { target: document.getElementById('nc_s2_e3_tgt').value, type: document.getElementById('nc_s2_e3_typ').value, value: parseFloat(document.getElementById('nc_s2_e3_val').value) / 100 }
+                            ]
+                        },
+                        burst: {
+                            base: parseFloat(document.getElementById('nc_b_base').value) / 100, bonus: parseFloat(document.getElementById('nc_b_bonus').value) / 100,
+                            duration: parseInt(document.getElementById('nc_b_dur').value)
+                        }
+                    });
+                } else {
+                    team.push({
+                        isNewChar: false, burstTier: parseInt(document.getElementById(`${teamId}_s${i}_bTier`).value), burstCD: parseInt(document.getElementById(`${teamId}_s${i}_bCD`).value),
+                        s1: {
+                            interval: parseInt(document.getElementById(`${teamId}_s${i}_s1_int`).value), duration: parseInt(document.getElementById(`${teamId}_s${i}_s1_dur`).value), maxStacks: parseInt(document.getElementById(`${teamId}_s${i}_s1_max`).value),
+                            effects: [
+                                { target: document.getElementById(`${teamId}_s${i}_s1_e1_tgt`).value, type: document.getElementById(`${teamId}_s${i}_s1_e1_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_s1_e1_val`).value) / 100 },
+                                { target: document.getElementById(`${teamId}_s${i}_s1_e2_tgt`).value, type: document.getElementById(`${teamId}_s${i}_s1_e2_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_s1_e2_val`).value) / 100 },
+                                { target: document.getElementById(`${teamId}_s${i}_s1_e3_tgt`).value, type: document.getElementById(`${teamId}_s${i}_s1_e3_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_s1_e3_val`).value) / 100 }
+                            ]
+                        },
+                        s2: {
+                            interval: parseInt(document.getElementById(`${teamId}_s${i}_s2_int`).value), duration: parseInt(document.getElementById(`${teamId}_s${i}_s2_dur`).value), maxStacks: parseInt(document.getElementById(`${teamId}_s${i}_s2_max`).value),
+                            effects: [
+                                { target: document.getElementById(`${teamId}_s${i}_s2_e1_tgt`).value, type: document.getElementById(`${teamId}_s${i}_s2_e1_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_s2_e1_val`).value) / 100 },
+                                { target: document.getElementById(`${teamId}_s${i}_s2_e2_tgt`).value, type: document.getElementById(`${teamId}_s${i}_s2_e2_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_s2_e2_val`).value) / 100 },
+                                { target: document.getElementById(`${teamId}_s${i}_s2_e3_tgt`).value, type: document.getElementById(`${teamId}_s${i}_s2_e3_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_s2_e3_val`).value) / 100 }
+                            ]
+                        },
+                        burst: {
+                            duration: parseInt(document.getElementById(`${teamId}_s${i}_b_dur`).value), maxStacks: parseInt(document.getElementById(`${teamId}_s${i}_b_max`).value),
+                            effects: [
+                                { target: document.getElementById(`${teamId}_s${i}_b_e1_tgt`).value, type: document.getElementById(`${teamId}_s${i}_b_e1_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_b_e1_val`).value) / 100 },
+                                { target: document.getElementById(`${teamId}_s${i}_b_e2_tgt`).value, type: document.getElementById(`${teamId}_s${i}_b_e2_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_b_e2_val`).value) / 100 },
+                                { target: document.getElementById(`${teamId}_s${i}_b_e3_tgt`).value, type: document.getElementById(`${teamId}_s${i}_b_e3_typ`).value, value: parseFloat(document.getElementById(`${teamId}_s${i}_b_e3_val`).value) / 100 }
+                            ]
+                        }
+                    });
+                }
+            }
+            return team;
+        }
+
+        let chartInstance = null;
+
+        function runSimulation() {
+            const time = parseInt(document.getElementById('battleTime').value);
+            const firstBurstTime = parseInt(document.getElementById('firstBurstTime').value);
+            const gaugeTime = parseInt(document.getElementById('gaugeTime').value);
+            const baseDps = parseFloat(document.getElementById('baseDps').value);
+            const bCritR = parseFloat(document.getElementById('baseCritRate').value) / 100;
+            const bCritD = parseFloat(document.getElementById('baseCritDmg').value) / 100;
+
+            const resA = simulate(getTeamConfig('A'), time, firstBurstTime, gaugeTime, baseDps, bCritR, bCritD);
+            const resB = simulate(getTeamConfig('B'), time, firstBurstTime, gaugeTime, baseDps, bCritR, bCritD);
+
+            drawChart(resA, resB);
+            
+            const totalA = resA.data[resA.data.length-1];
+            const totalB = resB.data[resB.data.length-1];
+            const diff = ((totalB - totalA) / totalA) * 100;
+            const diffSpan = diff >= 0 ? `<span class="highlight-yellow">▲ ${Math.abs(diff).toFixed(2)}% 상승</span>` : `<span class="highlight-red">▼ ${Math.abs(diff).toFixed(2)}% 하락</span>`;
+
+            document.getElementById('resultSummary').innerHTML = `
+                전투 종료 시뮬레이션 결과<br><br>
+                <span style="color:#aaa;">[A안] 기존 조합: ${Math.floor(totalA).toLocaleString()}</span><br>
+                <span style="color:#f3c300;">[B안] 신규 투입: ${Math.floor(totalB).toLocaleString()}</span><br><br>
+                기존 파티 대비 총 딜량이<br>${diffSpan} 했습니다!
+            `;
+        }
+
+        function simulate(team, battleTime, firstBurstTime, maxGaugeTime, totalBaseDps, bCritR, bCritD) {
+            let data = [];
+            let cumulative = 0;
+            const slotBaseDps = totalBaseDps / 5;
+            
+            let cds = [0, 0, 0, 0, 0];
+            let s1Timers = [0, 0, 0, 0, 0];
+            let s2Timers = [0, 0, 0, 0, 0];
+            let activeBuffs = []; 
+            
+            let gauge = 0;
+            let fullBurstTimeLeft = 0;
+            let currentBurstStage = 0;
+            let isFirstCycle = true; 
+
+            let ncStacks = 0;
+            let ncStackDurationTimer = 0;
+            let ncIntervalTimer = 0;
+
+            // 중첩(스택)을 고려한 버프 부여 함수
+            function applyBuff(source, skillType, effectIdx, eff, duration, maxStacks, currentTime) {
+                let buffId = `${source}_${skillType}_${effectIdx}`; // 고유 ID 부여로 중첩 추적
+                let existing = activeBuffs.find(b => b.id === buffId);
+                
+                if (existing) {
+                    existing.stacks = Math.min(maxStacks, existing.stacks + 1);
+                    existing.expires = currentTime + duration; // 시간 갱신
+                } else {
+                    activeBuffs.push({
+                        id: buffId, source: source, target: eff.target, type: eff.type,
+                        baseValue: eff.value, stacks: 1, maxStacks: maxStacks,
+                        expires: currentTime + duration
+                    });
+                }
+            }
+
+            for (let t = 0; t <= battleTime; t++) {
+                // 1. 타이머 감소
+                for(let i=0; i<5; i++) {
+                    if (cds[i] > 0) cds[i]--;
+                    if (s1Timers[i] > 0) s1Timers[i]--;
+                    if (s2Timers[i] > 0) s2Timers[i]--;
+                }
+                activeBuffs = activeBuffs.filter(b => b.expires > t);
+                if (fullBurstTimeLeft > 0) fullBurstTimeLeft--;
+
+                // 2. 일반 스킬 (S1, S2) 처리 로직
+                ['s1', 's2'].forEach(sk => {
+                    let timers = (sk === 's1') ? s1Timers : s2Timers;
+                    
+                    for(let i=0; i<5; i++) {
+                        let char = team[i];
+                        
+                        // 신규 캐릭터의 s1은 고유 기믹으로 별도 처리
+                        if (char.isNewChar && sk === 's1') {
+                            if (t > 0) {
+                                if (ncStackDurationTimer > 0) {
+                                    ncStackDurationTimer--;
+                                    if (ncStackDurationTimer <= 0) ncStacks = 0; 
+                                }
+                                ncIntervalTimer--;
+                                if (ncIntervalTimer <= 0) {
+                                    if (ncStacks < char.s1.maxStacks) ncStacks++; 
+                                    ncStackDurationTimer = char.s1.duration; 
+                                    ncIntervalTimer = char.s1.interval;
+                                }
+                            } else {
+                                ncIntervalTimer = char.s1.interval;
+                            }
+                            continue;
+                        }
+
+                        // 일반 처리 로직 (신규 캐릭터의 s2 포함 모든 범용 스킬)
+                        let skill = char[sk];
+                        if (skill && skill.interval > 0 && timers[i] <= 0) {
+                            let triggered = false;
+                            skill.effects.forEach((eff, eIdx) => {
+                                if (eff.value > 0) {
+                                    applyBuff(i, sk, eIdx, eff, skill.duration, skill.maxStacks, t);
+                                    triggered = true;
+                                }
+                            });
+                            if (triggered) timers[i] = skill.interval;
+                        }
+                    }
+                });
+
+                // 3. 버스트 발동 로직 
+                if (fullBurstTimeLeft === 0) {
+                    let requiredGaugeTime = isFirstCycle ? firstBurstTime : maxGaugeTime;
+                    if (gauge < requiredGaugeTime) { gauge++; } 
+                    else {
+                        for(let stage = 1; stage <= 3; stage++) {
+                            if (currentBurstStage === stage - 1) {
+                                for(let i=0; i<5; i++) {
+                                    if (team[i].burstTier === stage && cds[i] <= 0) {
+                                        cds[i] = team[i].burstCD;
+                                        
+                                        if (team[i].isNewChar) {
+                                            const b = team[i].burst;
+                                            const totalDebuff = b.base + (b.bonus * ncStacks);
+                                            applyBuff(i, 'burst', 'special', {target: 'enemy', type: 'debuff', value: totalDebuff}, b.duration, 1, t);
+                                        } else {
+                                            team[i].burst.effects.forEach((eff, eIdx) => {
+                                                if (eff.value > 0) {
+                                                    applyBuff(i, 'burst', eIdx, eff, team[i].burst.duration, team[i].burst.maxStacks, t);
+                                                }
+                                            });
+                                        }
+                                        
+                                        currentBurstStage = stage; 
+                                        if (stage === 3) {
+                                            fullBurstTimeLeft = 10;
+                                            currentBurstStage = 0;
+                                            gauge = 0;
+                                            isFirstCycle = false;
+                                        }
+                                        break; 
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. 프레임 데미지 연산 (스택을 곱한 버프 수치 적용)
+                let frameDps = 0;
+                
+                // 디버프 총합 (baseValue * stacks 적용)
+                let globalDebuff = activeBuffs.filter(b => b.type === 'debuff').reduce((sum, b) => sum + (b.baseValue * b.stacks), 0);
+
+                // 신규 캐릭터 상시 스택 디버프 합산
+                const ncIndex = team.findIndex(n => n.isNewChar);
+                if (ncIndex !== -1 && ncStacks > 0) {
+                    globalDebuff += (ncStacks * team[ncIndex].s1.val);
+                }
+
+                for(let i=0; i<5; i++) {
+                    let atkBuff = 0; let critRateBuff = 0; let critDmgBuff = 0;
+                    
+                    activeBuffs.forEach(b => {
+                        let isTarget = (b.target === 'all') || (b.target === 'self' && b.source === i) || (b.target === 'single' && i === 2);
+                        if (isTarget) {
+                            let totalEffectValue = b.baseValue * b.stacks; // 스택 적용된 최종 수치
+                            if (b.type === 'atk') atkBuff += totalEffectValue;
+                            if (b.type === 'crit_rate') critRateBuff += totalEffectValue;
+                            if (b.type === 'crit_dmg') critDmgBuff += totalEffectValue; 
+                        }
+                    });
+
+                    let currentCritRate = Math.min(1, bCritR + critRateBuff);
+                    let currentCritDmg = bCritD + critDmgBuff;
+                    let expectedCritMulti = 1 + (currentCritRate * currentCritDmg);
+                    
+                    let slotDps = slotBaseDps * (1 + atkBuff) * expectedCritMulti * (1 + globalDebuff);
+                    if (fullBurstTimeLeft > 0) slotDps *= 2.5; // 풀버스트 150% 데미지 증가
+
+                    frameDps += slotDps;
+                }
+
+                cumulative += frameDps;
+                if (t % 5 === 0) data.push({ x: t, y: cumulative });
+            }
+            return { data: data.map(d => d.y), labels: data.map(d => `${d.x}초`) };
+        }
+
+        function drawChart(resA, resB) {
+            const ctx = document.getElementById('damageChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: resA.labels,
+                    datasets: [
+                        { label: '[A안] 기존 조합 누적 딜량', data: resA.data, borderColor: '#777', borderWidth: 2, pointRadius: 0 },
+                        { label: '[B안] 신규 투입 누적 딜량', data: resB.data, borderColor: '#f3c300', backgroundColor: 'rgba(243, 195, 0, 0.15)', borderWidth: 3, pointRadius: 0, fill: true }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } }
+            });
+        }
+
+        window.onload = () => { initUI(); runSimulation(); };
+    </script>
+</body>
+</html>
